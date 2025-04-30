@@ -5,7 +5,11 @@ on:
     workflows: ["Deploy to EKS"]  # Matches deploy.yml name
     types:
       - completed
-
+on:
+  workflow_dispatch:  # <-- enables manual trigger
+  push:
+    branches:
+      - main
 jobs:
   rollback:
     if: ${{ failure() }}  # Only runs if previous workflow failed
