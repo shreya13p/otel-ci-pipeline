@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
 
+on:
+  workflow_dispatch:  # <-- enables manual trigger
+  push:
+    branches:
+      - main
+
 jobs:
   build:
     runs-on: ubuntu-latest
