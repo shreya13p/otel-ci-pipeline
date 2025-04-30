@@ -4,14 +4,19 @@ on:
   workflow_run:
     workflows: ["Build and Push Image"]
     types: [completed]
-on:
-  workflow_dispatch:  # <-- enables manual trigger
+  workflow_dispatch:
   push:
     branches:
       - main
+
+env:
+  CLUSTER_NAME: otel-demo-cluster
+  NAMESPACE: otel-demo-final
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout helm chart repo
         uses: actions/checkout@v3
@@ -27,11 +32,16 @@ jobs:
           region: us-east-1
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ${{variables.cluster_name}}
+        run: aws eks update-kubeconfig --name $CLUSTER_NAME
+
+      - name: Ensure namespace exists
+        run: |
+          kubectl get namespace $NAMESPACE || kubectl create namespace $NAMESPACE
 
       - name: Helm Deploy
         run: |
           helm upgrade --install otel-demo ./charts/opentelemetry-demo \
+            --namespace $NAMESPACE \
             --set image.repository=${{ secrets.DOCKERHUB_USERNAME }}/otel-demo \
             --set image.tag=latest
 
@@ -39,4 +49,3 @@ jobs:
         run: |
           chmod +x test/smoke_test.sh
           ./test/smoke_test.sh
-
