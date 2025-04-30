@@ -23,7 +23,7 @@ jobs:
           region: us-east-1
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name your-cluster-name
+        run: aws eks update-kubeconfig --name ${{variables.cluster_name}}
 
       - name: Helm Deploy
         run: |
