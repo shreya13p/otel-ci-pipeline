@@ -4,7 +4,11 @@ on:
   workflow_run:
     workflows: ["Build and Push Image"]
     types: [completed]
-
+on:
+  workflow_dispatch:  # <-- enables manual trigger
+  push:
+    branches:
+      - main
 jobs:
   deploy:
     runs-on: ubuntu-latest
