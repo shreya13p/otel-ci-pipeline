@@ -1,0 +1,41 @@
+name: Helm Rollback on Failure
+
+on:
+  workflow_run:
+    workflows: ["Deploy to EKS"]  # Matches deploy.yml name
+    types:
+      - completed
+
+jobs:
+  rollback:
+    if: ${{ failure() }}  # Only runs if previous workflow failed
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: us-east-1
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name your-cluster-name
+
+      - name: Get current Helm revision history
+        id: revisions
+        run: |
+          HISTORY=$(helm history otel-demo -n otel-demo-final --max=2 --output json)
+          echo "HISTORY=$HISTORY" >> $GITHUB_ENV
+          echo "PREV_REV=$(echo $HISTORY | jq '.[0].revision')" >> $GITHUB_ENV
+
+      - name: Rollback to previous revision
+        run: |
+          echo "Rolling back to revision $PREV_REV"
+          helm rollback otel-demo $PREV_REV -n otel-demo-final
+
+      - name: Verify Rollback Success
+        run: |
+          echo "Checking rollout status..."
+          kubectl rollout status deployment/otel-demo -n otel-demo-final --timeout=60s
+
