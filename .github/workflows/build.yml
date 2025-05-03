@@ -14,7 +14,7 @@ jobs:
 
       - name: Clone Helm chart repository (Repo 2)
         run: |
-          git clone https://github.com/<your-username>/<opentelemetry-helm-charts-repo>.git
+          git clone https://github.com/shreya13p/opentelemetry-helm-charts.git
 
       - name: Set up Helm
         run: |
@@ -34,7 +34,7 @@ jobs:
 
       - name: Set up kubeconfig for EKS
         run: |
-          aws eks update-kubeconfig --region us-west-2 --name your-cluster-name
+          aws eks update-kubeconfig --region us-east-1 --name otne
 
       - name: Deploy Helm chart
         run: |
