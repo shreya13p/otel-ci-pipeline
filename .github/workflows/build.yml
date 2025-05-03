@@ -1,6 +1,7 @@
 name: Deploy OpenTelemetry to EKS
 
 on:
+  workflow_dispatch:
   repository_dispatch:
     types: [deploy_otel]  # Match the event_type from the previous workflow
 
