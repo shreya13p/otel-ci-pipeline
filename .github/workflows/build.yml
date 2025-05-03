@@ -1,28 +1,38 @@
-name: Build and Push Image
+name: Build and Push Docker Images with Docker Compose
 
 on:
   push:
     branches: [main]
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
+      # Checkout the repository
       - name: Checkout app repo
         uses: actions/checkout@v3
         with:
           repository: shreya13p/opentelemetry-demo
-          token: ${{ secrets.PERSONAL_TOKEN }} # GitHub PAT stored securely
+          token: ${{ secrets.PERSONAL_TOKEN }}  # GitHub Personal Access Token stored securely
 
+      # Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & Push Docker Image
+      # Install Docker Compose
+      - name: Install Docker Compose
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/otel-demo:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/otel-demo:latest
+          sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
 
+      # Build and Push Docker Images using docker-compose
+      - name: Build and Push Docker Images
+        run: |
+          # Build and push all services defined in docker-compose.yml
+          docker-compose -f docker-compose.yml build
+          docker-compose -f docker-compose.yml push
