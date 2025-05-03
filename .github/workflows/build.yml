@@ -1,48 +1,75 @@
-name: Build and Push Docker Images to Docker Hub with Docker Compose
+name: Deploy Helm Chart to EKS
 
 on:
+  workflow_dispatch:  # Manual trigger from GitHub UI
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches:
+      - main           # Or any branch you want to trigger from
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository
-      - name: Checkout app repo
+      # Checkout this deployment repo
+      - name: Checkout deployment repo
         uses: actions/checkout@v3
+
+      # Clone the Helm chart repository (no need to specify opentelemetry subfolder)
+      - name: Clone Helm chart repository
+        run: |
+          git clone https://github.com/shreya13p/opentelemetry-helm-charts.git
+
+      # Set up Helm
+      - name: Set up Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      # Configure AWS credentials for EKS access
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
         with:
-          repository: shreya13p/opentelemetry-demo
-          token: ${{ secrets.PERSONAL_TOKEN }}  # GitHub Personal Access Token stored securely
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1  # Change to your region
 
-      # Log in to Docker Hub
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # Install Docker Compose
-      - name: Install Docker Compose
+      # Install kubectl
+      - name: Install kubectl
         run: |
-          sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
+          curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
-      # Build Docker images using Docker Compose
-      - name: Build Docker Images
+      # Set up kubeconfig for EKS
+      - name: Update kubeconfig for EKS
         run: |
-          docker-compose -f docker-compose.yml build
+          aws eks update-kubeconfig --region us-west-2 --name otne
 
-      # Tag and Push Docker Images to Docker Hub
-      - name: Tag and Push Docker Images to Docker Hub
+      # Deploy the Helm chart (using the general charts path)
+      - name: Deploy Helm Chart
         run: |
-          # Get the list of services in docker-compose file and push images to Docker Hub
-          for SERVICE in $(docker-compose -f docker-compose.yml config --services); do
-            IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${SERVICE}:latest"
-            # Tag the image for Docker Hub
-            docker tag "$SERVICE" "$IMAGE_NAME"
-            # Push the image to Docker Hub
-            docker push "$IMAGE_NAME"
-          done
+          helm upgrade otel-release ./opentelemetry-helm-charts/charts \
+            --install \
+            --namespace monitoring \
+            --create-namespace
+
+      # Wait for all pods to become ready
+      - name: Wait for pods to be ready
+        run: |
+          echo "⏳ Waiting for pods in 'monitoring' namespace to be Ready..."
+          kubectl wait --for=condition=Ready pod --all \
+            --namespace monitoring \
+            --timeout=180s
+
+      # Check pod statuses
+      - name: Check pod status
+        run: |
+          echo "🔍 Verifying pod statuses..."
+          kubectl get pods -n monitoring
+          STATUS=$(kubectl get pods -n monitoring --output=jsonpath='{.items[*].status.phase}')
+          echo "Pod status: $STATUS"
+          if [[ "$STATUS" != *"Running"* ]]; then
+            echo "❌ One or more pods are not running."
+            exit 1
+          else
+            echo "✅ All pods are running."
+          fi
