@@ -35,7 +35,7 @@ jobs:
 
       - name: Set up kubeconfig for EKS
         run: |
-          aws eks update-kubeconfig --region us-east-1 --name otne4
+          aws eks update-kubeconfig --region us-east-1 --name ${{ secrets.CLUSTER_NAME }}
 
       - name: Add Helm repositories
         run: |
