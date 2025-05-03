@@ -1,4 +1,4 @@
-name: Build and Push Docker Images with Docker Compose
+name: Build and Push Docker Images to Docker Hub with Docker Compose
 
 on:
   push:
@@ -30,9 +30,19 @@ jobs:
           sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
 
-      # Build and Push Docker Images using docker-compose
-      - name: Build and Push Docker Images
+      # Build Docker images using Docker Compose
+      - name: Build Docker Images
         run: |
-          # Build and push all services defined in docker-compose.yml
           docker-compose -f docker-compose.yml build
-          docker-compose -f docker-compose.yml push
+
+      # Tag and Push Docker Images to Docker Hub
+      - name: Tag and Push Docker Images to Docker Hub
+        run: |
+          # Get the list of services in docker-compose file and push images to Docker Hub
+          for SERVICE in $(docker-compose -f docker-compose.yml config --services); do
+            IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${SERVICE}:latest"
+            # Tag the image for Docker Hub
+            docker tag "$SERVICE" "$IMAGE_NAME"
+            # Push the image to Docker Hub
+            docker push "$IMAGE_NAME"
+          done
