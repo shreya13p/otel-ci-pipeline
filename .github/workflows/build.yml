@@ -1,69 +1,54 @@
-name: Deploy Helm Chart to EKS
+name: Deploy OpenTelemetry to EKS
 
 on:
-  workflow_dispatch:  # Manual trigger from GitHub UI
-  push:
-    branches:
-      - main           # Or any branch you want to trigger from
+  repository_dispatch:
+    types: [deploy_otel]  # Match the event_type from the previous workflow
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout this deployment repo
       - name: Checkout deployment repo
         uses: actions/checkout@v3
 
-      # Clone the Helm chart repository (no need to specify opentelemetry subfolder)
-      - name: Clone Helm chart repository
+      - name: Clone Helm chart repository (Repo 2)
         run: |
-          git clone https://github.com/shreya13p/opentelemetry-helm-charts.git
+          git clone https://github.com/<your-username>/<opentelemetry-helm-charts-repo>.git
 
-      # Set up Helm
       - name: Set up Helm
         run: |
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-      # Configure AWS credentials for EKS access
-      - name: Configure AWS credentials
+      - name: Set up AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1  # Change to your region
+          aws-region: us-east-1  # Change to your AWS region
 
-      # Install kubectl
       - name: Install kubectl
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
-      # Set up kubeconfig for EKS
-      - name: Update kubeconfig for EKS
+      - name: Set up kubeconfig for EKS
         run: |
-          aws eks update-kubeconfig --region us-west-2 --name otne
+          aws eks update-kubeconfig --region us-west-2 --name your-cluster-name
 
-      # Deploy the Helm chart (using the general charts path)
-      - name: Deploy Helm Chart
+      - name: Deploy Helm chart
         run: |
           helm upgrade otel-release ./opentelemetry-helm-charts/charts \
             --install \
             --namespace monitoring \
             --create-namespace
 
-      # Wait for all pods to become ready
-      - name: Wait for pods to be ready
+      - name: Wait for pods to become ready
         run: |
-          echo "⏳ Waiting for pods in 'monitoring' namespace to be Ready..."
-          kubectl wait --for=condition=Ready pod --all \
-            --namespace monitoring \
-            --timeout=180s
+          kubectl wait --for=condition=Ready pod --all --namespace monitoring --timeout=180s
 
-      # Check pod statuses
       - name: Check pod status
         run: |
-          echo "🔍 Verifying pod statuses..."
           kubectl get pods -n monitoring
           STATUS=$(kubectl get pods -n monitoring --output=jsonpath='{.items[*].status.phase}')
           echo "Pod status: $STATUS"
