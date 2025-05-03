@@ -3,7 +3,7 @@ name: Deploy OpenTelemetry to EKS
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [deploy_otel]  # Match the event_type from the previous workflow
+    types: [deploy_otel]
 
 jobs:
   deploy:
@@ -26,7 +26,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1  # Change to your AWS region
+          aws-region: us-east-1
 
       - name: Install kubectl
         run: |
@@ -61,14 +61,32 @@ jobs:
         run: |
           kubectl wait --for=condition=Ready pod --all --namespace monitoring --timeout=300s
 
-      - name: Check pod status
+      - name: Patch frontend to ClusterIP and frontend-proxy to LoadBalancer
         run: |
-          kubectl get pods -n monitoring
+          kubectl patch svc frontend -n monitoring -p '{"spec":{"type":"ClusterIP"}}'
+          kubectl patch svc frontend-proxy -n monitoring -p '{"spec":{"type":"LoadBalancer"}}'
+
+      - name: Wait for frontend-proxy external IP
+        run: |
+          for i in {1..30}; do
+            EXTERNAL_IP=$(kubectl get svc frontend-proxy -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+            if [ -n "$EXTERNAL_IP" ]; then
+              echo "Frontend URL: http://$EXTERNAL_IP:8080"
+              echo "FRONTEND_URL=http://$EXTERNAL_IP:8080" >> $GITHUB_ENV
+              break
+            fi
+            echo "Waiting for LoadBalancer IP..."
+            sleep 10
+          done
+
+      - name: Check pod status and rollback if necessary
+        run: |
           STATUS=$(kubectl get pods -n monitoring --output=jsonpath='{.items[*].status.phase}')
           echo "Pod status: $STATUS"
           if [[ "$STATUS" != *"Running"* ]]; then
-            echo "❌ One or more pods are not running."
+            echo "❌ One or more pods are not running. Rolling back..."
+            helm rollback otel-release --namespace monitoring
             exit 1
           else
-            echo "✅ All pods are running."
+            echo "✅ All pods are running. Application accessible at $FRONTEND_URL"
           fi
