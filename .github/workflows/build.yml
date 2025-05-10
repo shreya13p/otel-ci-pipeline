@@ -50,18 +50,15 @@ jobs:
         run: |
           helm dependency build ./opentelemetry-helm-charts/charts/opentelemetry-demo
 
-      - name: Deploy Helm chart
+      - name: Deploy Helm chart with atomic rollback
         run: |
           set -e
           helm upgrade otel-release ./opentelemetry-helm-charts/charts/opentelemetry-demo \
             --install \
             --namespace monitoring \
-            --create-namespace
-
-      - name: Wait for pods to become ready
-        run: |
-          echo "⏳ Waiting for pods to become ready..."
-          kubectl wait --for=condition=Ready pod --all --namespace monitoring --timeout=300s
+            --create-namespace \
+            --timeout 300s \
+            --atomic
 
       - name: Patch frontend to ClusterIP and frontend-proxy to LoadBalancer
         run: |
@@ -84,13 +81,12 @@ jobs:
 
       - name: Check pod status and rollback if necessary
         run: |
-          echo "🔍 Checking pod statuses..."
+          echo "🔍 Verifying pod health..."
           NOT_RUNNING=$(kubectl get pods -n monitoring --field-selector=status.phase!=Running --no-headers | wc -l)
           if [ "$NOT_RUNNING" -gt 0 ]; then
             echo "❌ Detected $NOT_RUNNING pods not in 'Running' state. Initiating rollback..."
             helm rollback otel-release --namespace monitoring
             exit 1
           else
-            echo "✅ All pods are running."
-            echo "Application is accessible at: ${FRONTEND_URL:-[external IP not yet available]}"
+            echo "✅ All pods are in Running state."
           fi
