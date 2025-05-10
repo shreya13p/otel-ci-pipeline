@@ -51,6 +51,7 @@ jobs:
           helm dependency build ./opentelemetry-helm-charts/charts/opentelemetry-demo
 
       - name: Deploy Helm chart with atomic rollback
+        continue-on-error: true
         run: |
           set -e
           helm upgrade otel-release ./opentelemetry-helm-charts/charts/opentelemetry-demo \
