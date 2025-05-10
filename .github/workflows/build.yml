@@ -52,6 +52,7 @@ jobs:
 
       - name: Deploy Helm chart
         run: |
+          set -e
           helm upgrade otel-release ./opentelemetry-helm-charts/charts/opentelemetry-demo \
             --install \
             --namespace monitoring \
@@ -59,6 +60,7 @@ jobs:
 
       - name: Wait for pods to become ready
         run: |
+          echo "⏳ Waiting for pods to become ready..."
           kubectl wait --for=condition=Ready pod --all --namespace monitoring --timeout=300s
 
       - name: Patch frontend to ClusterIP and frontend-proxy to LoadBalancer
@@ -68,25 +70,27 @@ jobs:
 
       - name: Wait for frontend-proxy external IP
         run: |
+          echo "⏳ Waiting for LoadBalancer external IP..."
           for i in {1..30}; do
-            EXTERNAL_IP=$(kubectl get svc frontend-proxy -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+            EXTERNAL_IP=$(kubectl get svc frontend-proxy -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
             if [ -n "$EXTERNAL_IP" ]; then
               echo "Frontend URL: http://$EXTERNAL_IP:8080"
               echo "FRONTEND_URL=http://$EXTERNAL_IP:8080" >> $GITHUB_ENV
               break
             fi
-            echo "Waiting for LoadBalancer IP..."
+            echo "Waiting for LoadBalancer IP ($i)..."
             sleep 10
           done
 
       - name: Check pod status and rollback if necessary
         run: |
-          STATUS=$(kubectl get pods -n monitoring --output=jsonpath='{.items[*].status.phase}')
-          echo "Pod status: $STATUS"
-          if [[ "$STATUS" != *"Running"* ]]; then
-            echo "❌ One or more pods are not running. Rolling back..."
+          echo "🔍 Checking pod statuses..."
+          NOT_RUNNING=$(kubectl get pods -n monitoring --field-selector=status.phase!=Running --no-headers | wc -l)
+          if [ "$NOT_RUNNING" -gt 0 ]; then
+            echo "❌ Detected $NOT_RUNNING pods not in 'Running' state. Initiating rollback..."
             helm rollback otel-release --namespace monitoring
             exit 1
           else
-            echo "✅ All pods are running. Application accessible at $FRONTEND_URL"
+            echo "✅ All pods are running."
+            echo "Application is accessible at: ${FRONTEND_URL:-[external IP not yet available]}"
           fi
